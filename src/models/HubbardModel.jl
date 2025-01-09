@@ -25,20 +25,21 @@ mutable struct HubbardModel{LT <: AbstractLattice} <: Model
     mu::Float64
     U::Float64
     l::LT
+    boundary::Symbol
 end
 
-@inline function HubbardModel(t::Real, mu::Real, U::Real, l::AbstractLattice)
-    HubbardModel(Float64(t), Float64(mu), Float64(U), l)
+@inline function HubbardModel(t::Real, mu::Real, U::Real, l::AbstractLattice, boundary::Symbol)
+    HubbardModel(Float64(t), Float64(mu), Float64(U), l, boundary)
 end
 
 function HubbardModel(; 
         dims = 2, L = 2, l = choose_lattice(HubbardModel, dims, L), 
-        U = 1.0, mu = 0.0, t = 1.0
+        U = 1.0, mu = 0.0, t = 1.0, boundary=:periodic
     )
     if (U < 0.0) && (mu != 0.0)
         @warn("A repulsive Hubbard model with chemical potential µ = $mu will have a sign problem!")
     end
-    HubbardModel(t, mu, U, l)
+    HubbardModel(t, mu, U, l, boundary)
 end
 HubbardModel(params::Dict{Symbol}) = HubbardModel(; params...)
 HubbardModel(params::NamedTuple) = HubbardModel(; params...)
@@ -115,8 +116,16 @@ function hopping_matrix(m::HubbardModel)
 
     # Nearest neighbor hoppings
     @inbounds @views begin
-        for b in bonds(m.l, Val(true))
-            T[b.to, b.from] += -m.t
+        if m.boundary == :periodic
+            for b in bonds(m.l, Val(true))
+                T[b.to, b.from] += -m.t
+            end
+        elseif  m.boundary == :open
+            for b in bonds_open(m.l, Val(true))
+                T[b.to, b.from] += -m.t
+            end
+        else
+            throw(ArgumentError("boundary condition should be :periodic or :open"))
         end
     end
 
